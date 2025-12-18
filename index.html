@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GlobeDash | Premium Country Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        
+        :root {
+            --brand-primary: #6366f1;
+            --brand-secondary: #06b6d4;
+            --bg-dark: #020617;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-dark);
+            color: #f8fafc;
+            overflow-x: hidden;
+        }
+
+        .mesh-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: 
+                radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(6, 182, 212, 0.12) 0%, transparent 50%);
+        }
+
+        #map, #gameMap {
+            height: 500px;
+            width: 100%;
+            border-radius: 2rem;
+            z-index: 10;
+        }
+
+        .glass {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .country-card {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .country-card:hover {
+            transform: scale(1.02);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .view-transition {
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+
+        .hidden-view {
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .loader {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--brand-primary);
+            animation: spinner 0.8s linear infinite;
+        }
+
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .game-status-pop {
+            animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes pop {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .life-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+        .life-active { background-color: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
+        .life-lost { background-color: #1e293b; }
+
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 1em;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="mesh-bg"></div>
+
+    <!-- MAIN DASHBOARD -->
+    <main id="dashboardView" class="view-transition max-w-[1400px] mx-auto p-6 md:p-12">
+        <header class="mb-12 flex flex-col xl:flex-row items-center justify-between gap-8">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/40">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2"></path></svg>
+                </div>
+                <div>
+                    <h1 class="text-4xl font-black tracking-tighter text-white">GlobeDash</h1>
+                    <p class="text-indigo-400 font-bold text-xs uppercase tracking-[0.2em]">World Explorer & Game</p>
+                </div>
+            </div>
+            
+            <div class="flex flex-col md:flex-row gap-4 w-full xl:w-auto items-center">
+                <button onclick="showGame()" class="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 rounded-2xl font-bold text-sm flex items-center gap-2 hover:shadow-xl hover:shadow-indigo-500/20 transition-all active:scale-95 whitespace-nowrap">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5z" stroke-width="2"></path></svg>
+                    Play GeoQuest
+                </button>
+                
+                <div class="flex flex-col sm:flex-row gap-3 w-full">
+                    <div class="relative flex-1">
+                        <input type="text" id="searchInput" placeholder="Search countries..." class="glass border-slate-700/50 pl-12 pr-4 py-4 rounded-2xl focus:outline-none w-full text-sm placeholder:text-slate-500">
+                        <svg class="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-width="2"></path>
+                        </svg>
+                    </div>
+
+                    <select id="continentFilter" class="glass border-slate-700/50 px-6 py-4 rounded-2xl focus:outline-none text-sm text-slate-300 min-w-[160px] cursor-pointer">
+                        <option value="all">All Continents</option>
+                        <option value="Africa">Africa</option>
+                        <option value="Americas">Americas</option>
+                        <option value="Asia">Asia</option>
+                        <option value="Europe">Europe</option>
+                        <option value="Oceania">Oceania</option>
+                    </select>
+                </div>
+            </div>
+        </header>
+
+        <div id="loading" class="flex flex-col justify-center items-center py-40 gap-4">
+            <div class="loader rounded-full h-12 w-12"></div>
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Loading Globe...</p>
+        </div>
+
+        <div id="countryGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 hidden"></div>
+    </main>
+
+    <!-- GAME VIEW -->
+    <main id="gameView" class="view-transition hidden-view max-w-[1000px] mx-auto p-6 md:p-12">
+        <div class="flex justify-between items-center mb-10">
+            <button onclick="showDashboard()" class="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-width="2"></path></svg>
+                <span class="text-sm font-bold uppercase tracking-widest">Quit Game</span>
+            </button>
+            <div class="flex gap-4">
+                <div class="glass px-6 py-2 rounded-xl text-center flex flex-col items-center">
+                    <p class="text-[9px] text-slate-500 uppercase font-black mb-1">Tries</p>
+                    <div class="flex gap-1.5" id="lifeContainer">
+                        <div class="life-dot life-active"></div>
+                        <div class="life-dot life-active"></div>
+                        <div class="life-dot life-active"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Question Card -->
+            <div class="lg:col-span-4 space-y-6">
+                <div class="glass p-8 rounded-[2.5rem] border-white/10 text-center relative overflow-hidden">
+                    <div id="gameLoadingOverlay" class="hidden absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+                        <div class="loader rounded-full h-8 w-8 mb-3"></div>
+                        <p class="text-[10px] font-bold text-white uppercase tracking-widest">Checking Guess...</p>
+                    </div>
+
+                    <p class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-6">Find This Country</p>
+                    <div id="questionContainer" class="space-y-6">
+                        <img id="gameFlag" src="" class="w-full h-32 object-contain rounded-xl shadow-lg mx-auto">
+                        <div id="gameHint" class="hidden text-sm text-slate-400 italic mt-4 bg-slate-800/50 p-3 rounded-xl"></div>
+                        <button id="hintBtn" onclick="giveHint()" class="text-[10px] font-bold text-slate-500 hover:text-white underline uppercase tracking-tighter mt-4 block mx-auto">Need a hint?</button>
+                    </div>
+                </div>
+                
+                <div id="feedbackBox" class="hidden glass p-6 rounded-3xl text-center border-emerald-500/20">
+                    <p id="feedbackText" class="font-bold"></p>
+                </div>
+            </div>
+
+            <!-- Game Map -->
+            <div class="lg:col-span-8">
+                <div class="relative">
+                    <div id="gameMap"></div>
+                    <div class="absolute top-4 left-4 z-[1000] glass px-4 py-2 rounded-xl pointer-events-none">
+                        <p class="text-[10px] font-bold text-white uppercase tracking-tighter">Click the correct country on the map</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- INSIGHT VIEW -->
+    <main id="insightView" class="view-transition hidden-view max-w-[1200px] mx-auto p-6 md:p-12">
+        <button onclick="showDashboard()" class="mb-8 flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-width="2"></path></svg>
+            <span class="text-sm font-bold uppercase tracking-widest">Back</span>
+        </button>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-8 space-y-8">
+                <div class="glass rounded-[3rem] overflow-hidden">
+                    <div class="relative h-64 bg-slate-900">
+                        <div class="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900/90 z-10"></div>
+                        <div class="absolute bottom-8 left-10 flex items-center gap-8 z-20">
+                            <img id="detailFlag" src="" class="w-40 h-28 object-cover rounded-2xl shadow-2xl border-4 border-white/10">
+                            <div>
+                                <p id="detailRegion" class="text-indigo-400 font-bold uppercase tracking-widest text-[10px] mb-2"></p>
+                                <h2 id="detailName" class="text-5xl font-black text-white tracking-tight"></h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-10">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                            <div class="stat-card p-6 rounded-3xl">
+                                <p class="text-[10px] uppercase font-bold text-slate-500 mb-2">Population</p>
+                                <p id="detailPop" class="text-2xl font-bold text-white"></p>
+                            </div>
+                            <div class="stat-card p-6 rounded-3xl">
+                                <p class="text-[10px] uppercase font-bold text-slate-500 mb-2">Capital</p>
+                                <p id="detailCapital" class="text-2xl font-bold text-white"></p>
+                            </div>
+                            <div class="stat-card p-6 rounded-3xl">
+                                <p class="text-[10px] uppercase font-bold text-slate-500 mb-2">Currency</p>
+                                <p id="detailCurr" class="text-xl font-bold text-indigo-400"></p>
+                            </div>
+                        </div>
+                        <div id="map"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-4 space-y-6">
+                <div class="bg-indigo-600 p-8 rounded-[2.5rem] text-white">
+                    <div class="flex justify-between items-start mb-6">
+                        <h4 class="text-xs font-black uppercase tracking-widest">Weather</h4>
+                        <span id="weatherIcon" class="text-4xl">☀️</span>
+                    </div>
+                    <p id="tempValue" class="text-6xl font-black tracking-tighter">--°</p>
+                    <div class="mt-8 pt-6 border-t border-white/20">
+                        <p class="text-[10px] uppercase font-bold opacity-60">Local Time</p>
+                        <p id="localClock" class="text-xl font-mono font-bold">00:00:00</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let countries = [], filteredCountries = [];
+        let map, gameMap, marker, detailGeoLayer, gameGeoLayer;
+        let targetCountry = null;
+        let lives = 3;
+        let guessMarkers = [];
+        let clockInterval;
+        let isLocked = false;
+
+        function showDashboard() { switchView('dashboardView'); }
+        function showInsight() { switchView('insightView'); }
+        function showGame() { 
+            switchView('gameView');
+            initGame();
+        }
+
+        function switchView(id) {
+            ['dashboardView', 'insightView', 'gameView'].forEach(v => {
+                const el = document.getElementById(v);
+                el.classList.add('hidden-view');
+                setTimeout(() => el.style.display = (v === id ? 'block' : 'none'), 400);
+            });
+            setTimeout(() => {
+                const view = document.getElementById(id);
+                view.classList.remove('hidden-view');
+                if (id === 'insightView' && map) map.invalidateSize();
+                if (id === 'gameView' && gameMap) gameMap.invalidateSize();
+            }, 450);
+        }
+
+        async function fetchCountries() {
+            try {
+                const res = await fetch('https://restcountries.com/v3.1/all?fields=name,flags,population,currencies,latlng,capital,region,cca3,timezones');
+                countries = await res.json();
+                countries.sort((a,b) => a.name.common.localeCompare(b.name.common));
+                filteredCountries = [...countries];
+                renderGrid();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('countryGrid').classList.remove('hidden');
+            } catch(e) { console.error("Failed to fetch countries", e); }
+        }
+
+        function renderGrid() {
+            const container = document.getElementById('countryGrid');
+            container.innerHTML = filteredCountries.map(c => `
+                <div onclick="selectCountry('${c.cca3}')" class="country-card glass p-6 rounded-[2rem] cursor-pointer group">
+                    <img src="${c.flags.png}" class="w-full h-32 object-cover rounded-2xl mb-4 shadow-lg group-hover:shadow-indigo-500/20 transition-all">
+                    <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">${c.region}</p>
+                    <h3 class="text-xl font-bold text-white group-hover:text-indigo-400 transition-colors">${c.name.common}</h3>
+                </div>
+            `).join('');
+        }
+
+        // GAME LOGIC
+        function initGame() {
+            if (!gameMap) {
+                gameMap = L.map('gameMap', { zoomControl: false, minZoom: 2 }).setView([20, 0], 2);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png').addTo(gameMap);
+                gameMap.on('click', onMapClick);
+            }
+            nextQuestion();
+        }
+
+        function clearGuessMarkers() {
+            guessMarkers.forEach(m => gameMap.removeLayer(m));
+            guessMarkers = [];
+        }
+
+        function nextQuestion() {
+            isLocked = false;
+            lives = 3;
+            clearGuessMarkers();
+            updateLifeUI();
+            targetCountry = countries[Math.floor(Math.random() * countries.length)];
+            document.getElementById('gameFlag').src = targetCountry.flags.svg;
+            document.getElementById('gameHint').classList.add('hidden');
+            document.getElementById('feedbackBox').classList.add('hidden');
+            if (gameGeoLayer) gameMap.removeLayer(gameGeoLayer);
+        }
+
+        function giveHint() {
+            if (!targetCountry) return;
+            const hint = document.getElementById('gameHint');
+            hint.textContent = `Continent: ${targetCountry.region} | Capital: ${targetCountry.capital?.[0] || 'Unknown'}`;
+            hint.classList.remove('hidden');
+            gameMap.flyTo(targetCountry.latlng, 3, { duration: 1.5 });
+        }
+
+        function updateLifeUI() {
+            const dots = document.getElementById('lifeContainer').children;
+            for(let i = 0; i < 3; i++) {
+                if (i < lives) {
+                    dots[i].classList.remove('life-lost');
+                    dots[i].classList.add('life-active');
+                } else {
+                    dots[i].classList.remove('life-active');
+                    dots[i].classList.add('life-lost');
+                }
+            }
+        }
+
+        async function onMapClick(e) {
+            if (!targetCountry || isLocked) return;
+            
+            document.getElementById('gameLoadingOverlay').classList.remove('hidden');
+            
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${e.latlng.lat}&lon=${e.latlng.lng}&format=json&accept-language=en`);
+                const data = await res.json();
+                
+                const guessedName = data.address?.country;
+                const guessedCode = data.address?.country_code?.toUpperCase();
+                
+                const isCorrect = guessedCode === targetCountry.cca3.substring(0,2) || 
+                                  guessedName === targetCountry.name.common ||
+                                  guessedName === targetCountry.name.official;
+
+                handleGuess(isCorrect, e.latlng);
+            } catch (err) {
+                const dist = Math.sqrt(Math.pow(e.latlng.lat - targetCountry.latlng[0], 2) + Math.pow(e.latlng.lng - targetCountry.latlng[1], 2));
+                handleGuess(dist < 6, e.latlng);
+            } finally {
+                document.getElementById('gameLoadingOverlay').classList.add('hidden');
+            }
+        }
+
+        function handleGuess(correct, latlng) {
+            const box = document.getElementById('feedbackBox');
+            const text = document.getElementById('feedbackText');
+            box.classList.remove('hidden', 'game-status-pop');
+            void box.offsetWidth; 
+            box.classList.add('game-status-pop');
+
+            if (correct) {
+                isLocked = true;
+                text.textContent = "CORRECT!";
+                text.className = "text-emerald-400 font-bold";
+                box.style.borderColor = "rgba(16, 185, 129, 0.4)";
+                highlightCountryOnMap(targetCountry.cca3, '#10b981', 'game');
+                setTimeout(nextQuestion, 2000);
+            } else {
+                lives--;
+                updateLifeUI();
+                
+                const m = L.circleMarker(latlng, { radius: 8, color: '#f43f5e', weight: 2, fillColor: '#f43f5e', fillOpacity: 0.6 }).addTo(gameMap);
+                guessMarkers.push(m);
+
+                if (lives > 0) {
+                    text.textContent = `WRONG! ${lives} ${lives === 1 ? 'try' : 'tries'} left`;
+                    text.className = "text-rose-400 font-bold";
+                    box.style.borderColor = "rgba(244, 63, 94, 0.4)";
+                } else {
+                    isLocked = true;
+                    text.innerHTML = `OUT OF TRIES!<br><span class="text-xs text-white opacity-70">Answer: ${targetCountry.name.common}</span>`;
+                    text.className = "text-rose-500 font-black";
+                    box.style.borderColor = "rgba(244, 63, 94, 0.8)";
+                    highlightCountryOnMap(targetCountry.cca3, '#f43f5e', 'game');
+                    setTimeout(nextQuestion, 3500);
+                }
+            }
+        }
+
+        async function highlightCountryOnMap(cca3, color, mode) {
+            const activeMap = mode === 'game' ? gameMap : map;
+            if (mode === 'game' && gameGeoLayer) gameMap.removeLayer(gameGeoLayer);
+            if (mode === 'detail' && detailGeoLayer) map.removeLayer(detailGeoLayer);
+            
+            try {
+                const res = await fetch(`https://raw.githubusercontent.com/johan/world.geo.json/master/countries/${cca3}.geo.json`);
+                if (!res.ok) throw new Error("GEOJSON_NOT_FOUND");
+                
+                const data = await res.json();
+                const newLayer = L.geoJSON(data, {
+                    style: { color: color, weight: 3, fillColor: color, fillOpacity: 0.3 }
+                }).addTo(activeMap);
+                
+                if (mode === 'game') gameGeoLayer = newLayer; else detailGeoLayer = newLayer;
+                activeMap.fitBounds(newLayer.getBounds(), { padding: [40, 40] });
+            } catch (e) {
+                const countryObj = countries.find(c => c.cca3 === cca3);
+                if (countryObj) {
+                   const fallbackCircle = L.circle(countryObj.latlng, {radius: 200000, color: color, fillOpacity: 0.4}).addTo(activeMap);
+                   if (mode === 'game') gameGeoLayer = fallbackCircle; else detailGeoLayer = fallbackCircle;
+                   activeMap.setView(countryObj.latlng, 4);
+                }
+            }
+        }
+
+        async function selectCountry(cca3) {
+            const c = countries.find(x => x.cca3 === cca3);
+            if (!c) return;
+            showInsight();
+            document.getElementById('detailName').textContent = c.name.common;
+            document.getElementById('detailFlag').src = c.flags.svg;
+            document.getElementById('detailPop').textContent = c.population.toLocaleString();
+            document.getElementById('detailCapital').textContent = c.capital?.[0] || 'N/A';
+            document.getElementById('detailRegion').textContent = c.region;
+            
+            const currKey = Object.keys(c.currencies || {})[0];
+            document.getElementById('detailCurr').textContent = currKey ? `${c.currencies[currKey].name} (${currKey})` : 'N/A';
+            
+            if (!map) {
+                map = L.map('map', { zoomControl: false }).setView(c.latlng, 4);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
+            } else {
+                map.setView(c.latlng, 4);
+            }
+            
+            highlightCountryOnMap(cca3, '#6366f1', 'detail');
+            fetchWeather(c.latlng[0], c.latlng[1]);
+            startTime(c.timezones[0]);
+        }
+
+        async function fetchWeather(lat, lon) {
+            try {
+                const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+                const data = await res.json();
+                document.getElementById('tempValue').textContent = `${Math.round(data.current_weather.temperature)}°`;
+            } catch(e) {}
+        }
+
+        function startTime(tz) {
+            clearInterval(clockInterval);
+            const clock = document.getElementById('localClock');
+            function tick() {
+                try {
+                    let offset = 0;
+                    if (tz.includes('UTC')) {
+                        const s = tz.includes('+') ? 1 : -1;
+                        const p = tz.replace(/UTC|[+-]/g, '').split(':');
+                        offset = s * (parseInt(p[0])*60 + (parseInt(p[1])||0));
+                    }
+                    const local = new Date(new Date().getTime() + (new Date().getTimezoneOffset()*60000) + (offset*60000));
+                    clock.textContent = local.toLocaleTimeString('en-GB', { hour12: false });
+                } catch(e) { clock.textContent = "--:--:--"; }
+            }
+            tick(); clockInterval = setInterval(tick, 1000);
+        }
+
+        function filterCountries() {
+            const searchVal = document.getElementById('searchInput').value.toLowerCase();
+            const continentVal = document.getElementById('continentFilter').value;
+            
+            filteredCountries = countries.filter(c => {
+                const matchesSearch = c.name.common.toLowerCase().includes(searchVal);
+                const matchesContinent = continentVal === 'all' || c.region === continentVal;
+                return matchesSearch && matchesContinent;
+            });
+            renderGrid();
+        }
+
+        document.getElementById('searchInput').addEventListener('input', filterCountries);
+        document.getElementById('continentFilter').addEventListener('change', filterCountries);
+
+        window.onload = fetchCountries;
+    </script>
+</body>
+</html>
