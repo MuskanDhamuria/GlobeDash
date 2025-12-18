@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GlobeDash | Premium Country Explorer</title>
+    <title>GlobeDash</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -278,6 +278,17 @@
             initGame();
         }
 
+        function safeFitBounds(mapInstance, layer, maxZoom = 6) {
+            setTimeout(() => {
+                mapInstance.invalidateSize();
+                mapInstance.fitBounds(layer.getBounds(), {
+                    padding: [60, 60],
+                    maxZoom,
+                    animate: true
+                });
+            }, 150);
+        }
+
         function switchView(id) {
             ['dashboardView', 'insightView', 'gameView'].forEach(v => {
                 const el = document.getElementById(v);
@@ -287,8 +298,9 @@
             setTimeout(() => {
                 const view = document.getElementById(id);
                 view.classList.remove('hidden-view');
-                if (id === 'insightView' && map) map.invalidateSize();
-                if (id === 'gameView' && gameMap) gameMap.invalidateSize();
+                if (id === 'insightView' && map) setTimeout(() => map.invalidateSize(), 200);
+                if (id === 'gameView' && gameMap) setTimeout(() => gameMap.invalidateSize(), 200);
+
             }, 450);
         }
 
@@ -439,7 +451,9 @@
                 }).addTo(activeMap);
                 
                 if (mode === 'game') gameGeoLayer = newLayer; else detailGeoLayer = newLayer;
-                activeMap.fitBounds(newLayer.getBounds(), { padding: [40, 40] });
+                const zoomCap = mode === 'game' ? 4 : 6;
+                safeFitBounds(activeMap, newLayer, zoomCap);
+
             } catch (e) {
                 const countryObj = countries.find(c => c.cca3 === cca3);
                 if (countryObj) {
