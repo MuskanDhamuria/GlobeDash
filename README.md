@@ -1,10 +1,8 @@
 #GlobeDash
 
-A country explorer and geography game built with:
-- Leaflet
-- Tailwind CSS
-- REST Countries API
-
-Play GeoQuest and explore the world interactively.
+Tech Stack
+- Frontend: HTML5, CSS3, TailwindCSS
+- Maps: Leaflet.js
+- APIs:REST Countries, Open-Meteo, OpenStreetMap Nominatim, GeoJSON files(Fallback)
 
 Live demo: https://muskandhamuria.github.io/GlobeDash/
