@@ -7,4 +7,4 @@ A country explorer and geography game built with:
 
 Play GeoQuest and explore the world interactively.
 
-Live demo: https://MuskanDhamuria.github.io/globedash/
+Live demo: https://muskandhamuria.github.io/GlobeDash/
